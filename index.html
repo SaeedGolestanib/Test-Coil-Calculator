@@ -602,59 +602,46 @@ class GitHubService {
         this.sha = null; // برای نگهداری هش آخرین نسخه فایل
     }
 
-    async loadData() {
-        if (!this.user || !this.repo) {
-            console.warn("پیکربندی گیت‌هاب انجام نشده است. از داده‌های محلی (خالی) استفاده می‌شود.");
-            return { coils: [], sheetOrders: [] };
-        }
-
-        try {
-            const response = await fetch(this.apiUrl, { cache: 'no-store' });
-            if (!response.ok) {
-                if (response.status === 404) {
-                    console.warn(`فایل database.json یافت نشد. در اولین ذخیره‌سازی ایجاد خواهد شد.`);
-                    return { coils: [], sheetOrders: [] };
-                }
-                throw new Error(`خطای گیت‌هاب: ${response.statusText}`);
-            }
-            const data = await response.json();
-            this.sha = data.sha;
-            const content = atob(data.content); // دیکد کردن از Base64
-            return JSON.parse(content);
-        } catch (error) {
-            throw new Error(`امکان بارگیری اطلاعات از گیت‌هاب وجود ندارد. لطفاً تنظیمات و اتصال اینترنت را بررسی کنید.\n${error.message}`);
-        }
-    }
+    loadData
 
     async saveData(data) {
-        if (!this.user || !this.repo || !this.token) {
-            throw new Error("پیکربندی گیت‌هاب (نام کاربری، مخزن و توکن) برای ذخیره‌سازی لازم است.");
-        }
-
-        const content = btoa(JSON.stringify(data, null, 2));
-        const body = {
-            message: `Data update: ${new Date().toISOString()}`,
-            content: content,
-            sha: this.sha // بسیار مهم: باید هش فایل را برای آپدیت ارسال کنید
-        };
-
-        try {
-            const response = await fetch(this.apiUrl, {
-                method: 'PUT',
-                headers: this.headers,
-                body: JSON.stringify(body)
-            });
-            if (!response.ok) {
-                throw new Error(`خطای گیت‌هاب هنگام ذخیره: ${response.statusText}`);
-            }
-            const result = await response.json();
-            this.sha = result.content.sha; // آپدیت کردن هش با نسخه جدید
-            console.log("اطلاعات با موفقیت در گیت‌هاب ذخیره شد.");
-        } catch (error) {
-            await this.refetchSha();
-            throw new Error(`امکان ذخیره اطلاعات در گیت‌هاب وجود ندارد.\n${error.message}`);
-        }
+    if (!this.user || !this.repo || !this.token) {
+        throw new Error("پیکربندی گیت‌هاب (نام کاربری، مخزن و توکن) برای ذخیره‌سازی لازم است.");
     }
+
+    // --- شروع تغییر ---
+    // 1. ابتدا به رشته جیسان تبدیل می‌کنیم.
+    const jsonString = JSON.stringify(data, null, 2);
+    // 2. سپس رشته را برای پشتیبانی از کاراکترهای فارسی (یونیکد) انکود می‌کنیم.
+    const encodedString = encodeURIComponent(jsonString)
+        .replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1));
+    // 3. حالا رشته امن را به Base64 تبدیل می‌کنیم.
+    const content = btoa(encodedString);
+    // --- پایان تغییر ---
+
+    const body = {
+        message: `Data update: ${new Date().toISOString()}`,
+        content: content,
+        sha: this.sha 
+    };
+
+    try {
+        const response = await fetch(this.apiUrl, {
+            method: 'PUT',
+            headers: this.headers,
+            body: JSON.stringify(body)
+        });
+        if (!response.ok) {
+            throw new Error(`خطای گیت‌هاب هنگام ذخیره: ${response.statusText}`);
+        }
+        const result = await response.json();
+        this.sha = result.content.sha;
+        console.log("اطلاعات با موفقیت در گیت‌هاب ذخیره شد.");
+    } catch (error) {
+        await this.refetchSha();
+        throw new Error(`امکان ذخیره اطلاعات در گیت‌هاب وجود ندارد.\n${error.message}`);
+    }
+}
 
     async refetchSha() {
         try {
